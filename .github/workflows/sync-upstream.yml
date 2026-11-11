@@ -1,0 +1,42 @@
+# Keeps this fork in step with the original project, Javex/hotprices-au.
+# Runs every day, and from Actions > Sync with original > Run workflow.
+#
+# Nacho Cookbook reads the prices hotprices.org publishes; this fork is our
+# backup copy of the code in case the original ever disappears. It only syncs:
+# it doesn't run the scrapers.
+name: Sync with original
+
+on:
+  schedule:
+    - cron: "17 3 * * *" # daily, about 2pm in Sydney
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository != 'Javex/hotprices-au'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Merge the original's latest changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/Javex/hotprices-au.git
+          git fetch upstream main
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "Already up to date with the original."
+            exit 0
+          fi
+          git merge --no-edit upstream/main
+          git push origin HEAD:${GITHUB_REF_NAME}
+          echo "Merged $(git rev-list --count HEAD@{1}..upstream/main 2>/dev/null || echo new) change(s) from the original."
